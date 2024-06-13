@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flip Game</title>
+    <style>
+        body {
+            font-family: 'SimSun', 'Microsoft YaHei', sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background: #f0f0f0;
+        }
+        h1 {
+            text-align: center;
+            font-weight: bold;
+            margin-bottom: 20px;
+            font-family: 'Gloria Hallelujah', cursive;
+            color: #333;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        .controls {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .controls > div {
+            margin: 10px 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        label {
+            margin-right: 10px;
+            color: #555;
+        }
+        input[type="text"],
+        input[type="number"] {
+            margin-left: 5px;
+            padding: 5px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            width: 60px;
+            text-align: center;
+        }
+        button {
+            margin-left: 10px;
+            padding: 5px 10px;
+            border: none;
+            border-radius: 5px;
+            background: #007BFF;
+            color: white;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        #gameCanvas {
+            border: 1px solid #ddd;
+            background-color: #fff;
+            margin: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Flip Game 翻转游戏</h1>
+        <div class="controls">
+            <div>
+                <label for="gridSize">方格规模:</label>
+                <input type="number" id="gridSize" min="2" max="10" value="4">
+                <button id="changeGridButton">更改</button>
+            </div>
+            <div>
+                <button id="resetButton">重置</button>
+                <label for="randomizeCheck">生成随机题目</label>
+                <input type="checkbox" id="randomizeCheck">
+                <button id="answerButton">获得实时可行解</button>
+            </div>
+            <div>
+                <label for="movesBox">当前步数:</label>
+                <input type="text" id="movesBox" value="0" readonly>
+                <label for="minMovesBox">最小成功步数:</label>
+                <input type="text" id="minMovesBox" value="∞" readonly>
+            </div>
+        </div>
+        <canvas id="gameCanvas" width="500" height="500"></canvas>
+    </div>
+
+    <script>
+        let canvas = document.getElementById('gameCanvas');
+        let ctx = canvas.getContext('2d');
+        let N = 4; // 默认值
+        let grid = Array.from({ length: N }, () => Array(N).fill(false));
+        let numMoves = 0;
+        let minMoves = Infinity;
+        let randomPuzzle = null;
+
+        let resetButton = document.getElementById('resetButton');
+        let answerButton = document.getElementById('answerButton');
+        let changeGridButton = document.getElementById('changeGridButton');
+
+        resetButton.addEventListener('click', resetGrid);
+        answerButton.addEventListener('click', showAnswer);
+        changeGridButton.addEventListener('click', changeGridSize);
+
+        function resetGrid() {
+            const randomize = document.getElementById('randomizeCheck').checked;
+            if (randomize) {
+                grid = generateSolvablePuzzle();
+                randomPuzzle = grid.map(row => row.slice());
+                minMoves = '∞';
+                updateMinMovesText();
+            } else {
+                if (randomPuzzle) {
+                    grid = randomPuzzle.map(row => row.slice());
+                } else {
+                    grid = Array.from({ length: N }, () => Array(N).fill(false));
+                }
+            }
+            numMoves = 0;
+            updateMovesText();
+            drawGrid();
+        }
+
+        function drawGrid() {
+            canvas.width = canvas.height = N * 50; // 动态设置canvas尺寸
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const cellSize = canvas.width / N;
+            for (let i = 0; i < N; i++) {
+                for (let j = 0; j < N; j++) {
+                    ctx.fillStyle = grid[i][j] ? 'lightblue' : 'white';
+                    ctx.fillRect(j * cellSize, i * cellSize, cellSize, cellSize);
+                    ctx.strokeRect(j * cellSize, i * cellSize, cellSize, cellSize);
+                }
+            }
+        }
+
+        function handleCanvasClick(event) {
+            const rect = canvas.getBoundingClientRect();
+            const x = Math.floor((event.clientX - rect.left) / (canvas.width / N));
+            const y = Math.floor((event.clientY - rect.top) / (canvas.height / N));
+            flipTile(x, y);
+            numMoves += 1;
+            updateMovesText();
+            drawGrid();
+            if (grid.every(row => row.every(cell => cell))) {
+                alert('Congratulations! You win!');
+                if(minMoves=='∞') minMoves = numMoves;
+                else minMoves = Math.min(minMoves, numMoves);
+                updateMinMovesText();
+            }
+        }
+
+        function flipTile(x, y) {
+            const coords = [[0, 0], [0, 1], [0, -1], [1, 0], [-1, 0]];
+            coords.forEach(([dx, dy]) => {
+                const nx = x + dx, ny = y + dy;
+                if (nx >= 0 && nx < N && ny >= 0 && ny < N) {
+                    grid[ny][nx] = !grid[ny][nx];
+                }
+            });
+        }
+
+        function updateMovesText() {
+            document.getElementById('movesBox').value = numMoves;
+        }
+
+        function updateMinMovesText() {
+            document.getElementById('minMovesBox').value = minMoves;
+        }
+
+        function generateSolvablePuzzle() {
+            const board = Array.from({ length: N }, () => Array(N).fill(false));
+            const numFlips = Math.floor(Math.random() * N * N) + 1;
+            const flips = Array.from({ length: numFlips }, () => [
+                Math.floor(Math.random() * N),
+                Math.floor(Math.random() * N)
+            ]);
+            flips.forEach(([x, y]) => flipTileOnBoard(board, x, y));
+            return board;
+        }
+
+        function flipTileOnBoard(board, x, y) {
+            const coords = [[0, 0], [0, 1], [0, -1], [1, 0], [-1, 0]];
+            coords.forEach(([dx, dy]) => {
+                const nx = x + dx, ny = y + dy;
+                if (nx >= 0 && nx < N && ny >= 0 && ny < N) {
+                    board[ny][nx] = !board[ny][nx];
+                }
+            });
+        }
+
+        function showAnswer() {
+            const solution = solvePuzzle(grid);
+            if (solution) {
+                displaySolution(solution);
+            } else {
+                alert('No solution found.');
+            }
+        }
+
+       
+        function solvePuzzle(grid) {
+            const n = N;
+            const a = [];
+            const b = Array(n * n).fill(1);
+
+            for (let i = 0; i < n; i++) {
+                for (let j = 0; j < n; j++) {
+                    const d = Array(n * n).fill(0);
+                    d[i * n + j] = 1;
+                    if (i > 0) d[(i - 1) * n + j] = 1;
+                    if (i < n - 1) d[(i + 1) * n + j] = 1;
+                    if (j > 0) d[i * n + j - 1] = 1;
+                    if (j < n - 1) d[i * n + j + 1] = 1;
+                    a.push(d);
+                }
+            }
+
+            for (let i = 0; i < n; i++) {
+                for (let j = 0; j < n; j++) {
+                    if (grid[i][j]) {
+                        b[i * n + j] ^= 1;
+                    }
+                }
+            }
+
+            a.forEach((row, index) => row.push(b[index]));
+
+            const result = gaussianElimination(a, n * n);
+            if (result) {
+                const solutionGrid = Array.from({ length: n }, () => Array(n).fill(false));
+                for (let i = 0; i < n; i++) {
+                    for (let j = 0; j < n; j++) {
+                        if (result[i * n + j]) {
+                            solutionGrid[i][j] = true;
+                        }
+                    }
+                }
+                return solutionGrid;
+            }
+            return null;
+        }
+
+        function gaussianElimination(matrix, n) {
+            let line = 0;
+            for (let k = 0; k < n; k++) {
+                let row = line;
+                while (row < n && matrix[row][k] === 0) row++;
+                if (row === n) continue;
+                [matrix[line], matrix[row]] = [matrix[row], matrix[line]];
+
+                for (let i = line + 1; i < n; i++) {
+                    if (matrix[i][k] === 1) {
+                        for (let j = k; j <= n; j++) {
+                            matrix[i][j] ^= matrix[line][j];
+                        }
+                    }
+                }
+                line++;
+            }
+
+            for (let i = n - 1; i >= 0; i--) {
+                if (matrix[i][i] === 0) continue;
+                for (let j = 0; j < i; j++) {
+                    if (matrix[j][i] === 1) {
+                        matrix[j][n] ^= matrix[i][n];
+                    }
+                }
+            }
+
+            return matrix.map(row => row[n]);
+        }
+
+        function displaySolution(solution) {
+            const solutionWindow = window.open('', 'Solution', 'width=500,height=500');
+            const doc = solutionWindow.document;
+            const solutionHTML = `
+                <!DOCTYPE html>
+                <html lang="en">
+                <head>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <title>Solution</title>
+                </head>
+                <body>
+                    <canvas id="solutionCanvas" width="500" height="500"></canvas>
+                    <script>
+                        const canvas = document.getElementById('solutionCanvas');
+                        const ctx = canvas.getContext('2d');
+                        const cellSize = canvas.width / ${N};
+                        const solution = ${JSON.stringify(solution)};
+                        for (let i = 0; i < ${N}; i++) {
+                            for (let j = 0; j < ${N}; j++) {
+                                ctx.fillStyle = solution[i][j] ? 'red' : 'white';
+                                ctx.fillRect(j * cellSize, i * cellSize, cellSize, cellSize);
+                                ctx.strokeRect(j * cellSize, i * cellSize, cellSize, cellSize);
+                            }
+                        }
+                    <\/script>
+                </body>
+                </html>`;
+            doc.open();
+            doc.write(solutionHTML);
+            doc.close();
+        }
+
+        function changeGridSize() {
+            let newSize = parseInt(document.getElementById('gridSize').value);
+            if(newSize < 2) newSize = 2;
+            if(newSize > 10) newSize = 10;
+            N = newSize;
+            minMoves = '∞';
+            randomPuzzle = null;
+            updateMinMovesText();
+            resetGrid();
+        }
+
+        resetGrid(); // 初始化游戏
+
+        canvas.addEventListener('click', handleCanvasClick);
+    </script>
+</body>
+</html>
+

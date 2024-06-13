@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flip Game</title>
+    <style>
+        body {
+            font-family: 'SimSun', 'Microsoft YaHei', sans-serif;
+        }
+        #gameCanvas {
+            border: 1px solid black;
+            background-color: white;
+            margin: 20px;
+        }
+        .controls {
+            display: flex;
+            flex-direction: column;
+        }
+        .controls > div {
+            margin: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Flip Game</h1>
+    <div>
+        <canvas id="gameCanvas" width="500" height="500"></canvas>
+        <div class="controls">
+            <div>
+                <button id="resetButton">Reset</button>
+                <label for="randomizeCheck">Randomize</label>
+                <input type="checkbox" id="randomizeCheck">
+            </div>
+            <div>
+                <button id="answerButton">Get Answer</button>
+            </div>
+            <div>
+                <label for="movesBox">步数:</label>
+                <input type="text" id="movesBox" value="0" readonly>
+            </div>
+            <div>
+                <label for="minMovesBox">最小步数:</label>
+                <input type="text" id="minMovesBox" value="∞" readonly>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        //在这里修改N值
+        const N = 4; 
+        let grid = Array.from({ length: N }, () => Array(N).fill(false));
+        let numMoves = 0;
+        let minMoves = Infinity;
+        let randomPuzzle = null;
+
+        document.getElementById('resetButton').addEventListener('click', resetGrid);
+        document.getElementById('answerButton').addEventListener('click', showAnswer);
+        canvas.addEventListener('click', handleCanvasClick);
+
+        drawGrid();
+
+        function resetGrid() {
+            const randomize = document.getElementById('randomizeCheck').checked;
+            if (randomize) {
+                grid = generateSolvablePuzzle();
+                randomPuzzle = grid.map(row => row.slice());
+                minMoves = Infinity;
+                updateMinMovesText();
+            } else {
+                if (randomPuzzle) {
+                    grid = randomPuzzle.map(row => row.slice());
+                } else {
+                    grid = Array.from({ length: N }, () => Array(N).fill(false));
+                }
+            }
+            numMoves = 0;
+            updateMovesText();
+            drawGrid();
+        }
+
+        function drawGrid() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const cellSize = canvas.width / N;
+            for (let i = 0; i < N; i++) {
+                for (let j = 0; j < N; j++) {
+                    ctx.fillStyle = grid[i][j] ? 'lightblue' : 'white';
+                    ctx.fillRect(j * cellSize, i * cellSize, cellSize, cellSize);
+                    ctx.strokeRect(j * cellSize, i * cellSize, cellSize, cellSize);
+                }
+            }
+        }
+
+        function handleCanvasClick(event) {
+            const rect = canvas.getBoundingClientRect();
+            const x = Math.floor((event.clientX - rect.left) / (canvas.width / N));
+            const y = Math.floor((event.clientY - rect.top) / (canvas.height / N));
+            flipTile(x, y);
+            numMoves += 1;
+            updateMovesText();
+            drawGrid();
+            if (grid.every(row => row.every(cell => cell))) {
+                alert('Congratulations! You win!');
+                minMoves = Math.min(minMoves, numMoves);
+                updateMinMovesText();
+            }
+        }
+
+        function flipTile(x, y) {
+            const coords = [[0, 0], [0, 1], [0, -1], [1, 0], [-1, 0]];
+            coords.forEach(([dx, dy]) => {
+                const nx = x + dx, ny = y + dy;
+                if (nx >= 0 && nx < N && ny >= 0 && ny < N) {
+                    grid[ny][nx] = !grid[ny][nx];
+                }
+            });
+        }
+
+        function updateMovesText() {
+            document.getElementById('movesBox').value = numMoves;
+        }
+
+        function updateMinMovesText() {
+            document.getElementById('minMovesBox').value = minMoves;
+        }
+
+        function generateSolvablePuzzle() {
+            const board = Array.from({ length: N }, () => Array(N).fill(false));
+            const numFlips = Math.floor(Math.random() * N * N) + 1;
+            const flips = Array.from({ length: numFlips }, () => [
+                Math.floor(Math.random() * N),
+                Math.floor(Math.random() * N)
+            ]);
+            flips.forEach(([x, y]) => flipTileOnBoard(board, x, y));
+            return board;
+        }
+
+        function flipTileOnBoard(board, x, y) {
+            const coords = [[0, 0], [0, 1], [0, -1], [1, 0], [-1, 0]];
+            coords.forEach(([dx, dy]) => {
+                const nx = x + dx, ny = y + dy;
+                if (nx >= 0 && nx < N && ny >= 0 && ny < N) {
+                    board[ny][nx] = !board[ny][nx];
+                }
+            });
+        }
+
+        function showAnswer() {
+            const solution = solvePuzzle(grid);
+            if (solution) {
+                displaySolution(solution);
+            } else {
+                alert('No solution found.');
+            }
+        }
+
+        function solvePuzzle(grid) {
+            const n = N;
+            const a = [];
+            const b = Array(n * n).fill(1);
+
+            for (let i = 0; i < n; i++) {
+                for (let j = 0; j < n; j++) {
+                    const d = Array(n * n).fill(0);
+                    d[i * n + j] = 1;
+                    if (i > 0) d[(i - 1) * n + j] = 1;
+                    if (i < n - 1) d[(i + 1) * n + j] = 1;
+                    if (j > 0) d[i * n + j - 1] = 1;
+                    if (j < n - 1) d[i * n + j + 1] = 1;
+                    a.push(d);
+                }
+            }
+
+            for (let i = 0; i < n; i++) {
+                for (let j = 0; j < n; j++) {
+                    if (grid[i][j]) {
+                        b[i * n + j] ^= 1;
+                    }
+                }
+            }
+
+            a.forEach((row, index) => row.push(b[index]));
+
+            const result = gaussianElimination(a, n * n);
+            if (result) {
+                const solutionGrid = Array.from({ length: n }, () => Array(n).fill(false));
+                for (let i = 0; i < n; i++) {
+                    for (let j = 0; j < n; j++) {
+                        if (result[i * n + j]) {
+                            solutionGrid[i][j] = true;
+                        }
+                    }
+                }
+                return solutionGrid;
+            }
+            return null;
+        }
+
+        function gaussianElimination(matrix, n) {
+            let line = 0;
+            for (let k = 0; k < n; k++) {
+                let row = line;
+                while (row < n && matrix[row][k] === 0) row++;
+                if (row === n) continue;
+                [matrix[line], matrix[row]] = [matrix[row], matrix[line]];
+
+                for (let i = line + 1; i < n; i++) {
+                    if (matrix[i][k] === 1) {
+                        for (let j = k; j <= n; j++) {
+                            matrix[i][j] ^= matrix[line][j];
+                        }
+                    }
+                }
+                line++;
+            }
+
+            for (let i = n - 1; i >= 0; i--) {
+                if (matrix[i][i] === 0) continue;
+                for (let j = 0; j < i; j++) {
+                    if (matrix[j][i] === 1) {
+                        matrix[j][n] ^= matrix[i][n];
+                    }
+                }
+            }
+
+            return matrix.map(row => row[n]);
+        }
+
+        function displaySolution(solution) {
+            const solutionWindow = window.open('', 'Solution', 'width=500,height=500');
+            const doc = solutionWindow.document;
+            const solutionHTML = `
+                <!DOCTYPE html>
+                <html lang="en">
+                <head>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <title>Solution</title>
+                </head>
+                <body>
+                    <canvas id="solutionCanvas" width="500" height="500"></canvas>
+                    <script>
+                        const canvas = document.getElementById('solutionCanvas');
+                        const ctx = canvas.getContext('2d');
+                        const cellSize = canvas.width / ${N};
+                        const solution = ${JSON.stringify(solution)};
+                        for (let i = 0; i < ${N}; i++) {
+                            for (let j = 0; j < ${N}; j++) {
+                                ctx.fillStyle = solution[i][j] ? 'red' : 'white';
+                                ctx.fillRect(j * cellSize, i * cellSize, cellSize, cellSize);
+                                ctx.strokeRect(j * cellSize, i * cellSize, cellSize, cellSize);
+                            }
+                        }
+                    <\/script>
+                </body>
+                </html>`;
+            doc.open();
+            doc.write(solutionHTML);
+            doc.close();
+        }
+    </script>
+</body>
+</html>
